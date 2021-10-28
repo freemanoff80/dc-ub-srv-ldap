@@ -1,0 +1,57 @@
+
+version: '3.8'
+
+services:
+
+    openldap:
+        container_name: dc-ldap
+        restart: unless-stopped
+        hostname: dc-ldap
+        build:
+            context: ./build
+            dockerfile: Dockerfile.openldap
+            args:
+                IMAGE_VERSION: latest
+                ### If you need root access, set a password
+                ROOT_USER_PASSWORD: changeme
+                ### If you need to add another user, set the parameters
+                #ADD_USER_NAME: adminus
+                #ADD_USER_PASSWORD: changeme
+                #ADD_USER_SUDO: "yes"
+
+        networks:
+            - dc-ldap
+        ports:
+            - "22322:2222"
+            - "22389:389"
+            #- "636:636"
+            - "22380:80"
+        volumes:
+            - /etc/localtime:/etc/localtime:ro
+              ##- "./data-etc-phpldapadmin:/etc/phpldapadmin"
+              #- "data-etc-ldap:/etc/ldap"
+              ##- "./data/etc/phpldapadmin:/etc/phpldapadmin"
+              #- "data-etc-phpldapadmin:/etc/phpldapadmin"
+
+#volumes:
+#  data-etc-ldap:
+#    driver: local
+#    driver_opts:
+#      type: "none"
+#      o: "bind"
+#      device: "/opt/docker/dc-ldap/data/etc/ldap"
+#  data-etc-phpldapadmin:
+#    driver: local
+#    driver_opts:
+#      type: "none"
+#      o: "bind"
+#      device: "/opt/docker/dc-ldap/data/etc/phpldapadmin"
+ 
+
+networks:
+    dc-ldap:
+        name: dc-ldap
+        ipam:
+            driver: default
+            #config:
+            #    - subnet: 172.16.10.0/24

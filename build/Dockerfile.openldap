@@ -1,0 +1,87 @@
+ARG IMAGE_VERSION
+FROM ubuntu:${IMAGE_VERSION}
+
+#ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Moscow 
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Args For Users Settings
+ARG ROOT_USER_PASSWORD
+#
+#ARG ADD_USER_NAME
+#ARG ADD_USER_PASSWORD
+#ARG ADD_USER_SUDO
+
+
+### Update OS
+RUN apt-get -y update && apt-get -y upgrade
+
+### Install Utils Packages
+RUN apt-get -y install \
+bind9-dnsutils \
+vim \
+less \
+net-tools \
+iputils-ping \
+iproute2 \
+netcat \
+sudo \
+openssh-server \
+supervisor
+
+### Install Utils Packages
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install \
+slapd \
+ldap-utils \
+phpldapadmin
+
+### Settings For User root
+RUN if [ -z "${ROOT_USER_PASSWORD}" ]; then \
+        echo ROOT_USER_PASSWORD is EMPTY; \
+    else \
+        echo root:${ROOT_USER_PASSWORD} |chpasswd && \
+        echo "PermitRootLogin yes" >> /etc/ssh/sshd_config; \
+    fi
+
+### Settings For User additional user
+#RUN if [ -z "${ADD_USER_NAME}" ]; then \
+#        echo ADD_USER_NAME is EMPTY; \
+#    else \
+#        if [ ${ADD_USER_SUDO} ]; then \
+#            useradd -G sudo -s /bin/bash -m ${ADD_USER_NAME}; \
+#        else \
+#            useradd -s /bin/bash -m ${ADD_USER_NAME}; \
+#        fi; \
+#        echo ${ADD_USER_NAME}:${ADD_USER_PASSWORD} |chpasswd; \
+#    fi
+
+
+### Setting For Service SSH
+RUN echo "PasswordAuthentication yes\nPort 2222" >> /etc/ssh/sshd_config
+RUN service ssh start
+RUN service slapd start
+#RUN service apache2 start
+
+### Settins For Volumes
+#VOLUME /etc/ldap
+#VOLUME /etc/phpldapadmin
+
+### Settins For Supervisor
+COPY copyfiles/supervisord.conf /etc/supervisor/supervisord.conf
+
+### Expose Port For SSH Service
+EXPOSE 2222
+EXPOSE 389
+EXPOSE 80
+
+# Running SSH Service Demon
+#ENTRYPOINT /usr/sbin/sshd && /usr/sbin/nginx -g 'daemon off;'
+#ENTRYPOINT /usr/sbin/sshd -D
+#ENTRYPOINT /usr/bin/supervisord
+CMD ["/usr/bin/supervisord"]
+#CMD /usr/bin/supervisord
+#ENTRYPOINT /usr/sbin/sshd && /usr/sbin/slapd
+#ENTRYPOINT /usr/sbin/apache2 && /usr/sbin/slapd && /usr/sbin/sshd -D
+#ENTRYPOINT /usr/sbin/slapd && /usr/sbin/sshd -D
+#ENTRYPOINT /usr/sbin/sshd && /usr/sbin/slapd && /usr/sbin/apachectl -D FOREGROUND
+#ENTRYPOINT /usr/sbin/apachectl -D FOREGROUND && /usr/sbin/slapd && /usr/sbin/sshd
