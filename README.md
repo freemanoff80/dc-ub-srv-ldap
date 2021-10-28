@@ -1,3 +1,3 @@
-# dc-ldap
+# dc-ubuntu-server-ldap
 
-Docker-compose openldap server with web-manager phpldapadmin
+Docker-compose ubuntu server with openldap and web-manager phpldapadmin
