@@ -25,6 +25,9 @@ net-tools \
 iputils-ping \
 iproute2 \
 netcat \
+htop \
+curl \
+lynx \
 sudo \
 openssh-server \
 supervisor
@@ -42,6 +45,7 @@ RUN if [ -z "${ROOT_USER_PASSWORD}" ]; then \
         echo root:${ROOT_USER_PASSWORD} |chpasswd && \
         echo "PermitRootLogin yes" >> /etc/ssh/sshd_config; \
     fi
+
 
 ### Settings For User additional user
 #RUN if [ -z "${ADD_USER_NAME}" ]; then \
@@ -68,6 +72,23 @@ RUN service slapd start
 
 ### Settins For Supervisor
 COPY copyfiles/supervisord.conf /etc/supervisor/supervisord.conf
+
+
+### Settins For phpLDAPadmin
+
+# Create New Config File Apache2 For phpLDAPadmin
+RUN cat /etc/apache2/sites-available/000-default.conf |grep -v "#" > /etc/apache2/sites-available/phpldapadmin.conf
+RUN sed -i  's:DocumentRoot.*:DocumentRoot /usr/share/phpldapadmin/htdocs/:' /etc/apache2/sites-available/phpldapadmin.conf
+RUN ln -s /etc/apache2/sites-available/phpldapadmin.conf /etc/apache2/sites-enabled/
+
+# Backup Default Config File Apache2
+#mv /etc/apache2/sites-available/000-default.conf{,.backup.`date '+%Y%m%d'`}
+
+# Remove Symvol Links On Default Config File Apache2
+RUN rm /etc/apache2/sites-enabled/000-default.conf
+
+# Delete Bug with {}
+RUN sed -i 's/'\''$'\'' == $rdn{ strlen($rdn) - 1 })/'\''$'\'' == $rdn[ strlen($rdn) - 1 ])/' /usr/share/phpldapadmin/lib/functions.php
 
 ### Expose Port For SSH Service
 EXPOSE 2222
