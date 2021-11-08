@@ -1,0 +1,10 @@
+dn: dc=ssnet,dc=local
+objectClass: top
+objectClass: dcObject
+objectclass: organization
+o: ssnet local
+dc: ssnet
+
+dn: cn=admin,dc=ssnet,dc=local
+objectclass: organizationalRole
+cn: admin

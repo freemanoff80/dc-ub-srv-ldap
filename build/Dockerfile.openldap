@@ -12,6 +12,13 @@ ARG ROOT_USER_PASSWORD
 #ARG ADD_USER_PASSWORD
 #ARG ADD_USER_SUDO
 
+#ARG LDAP_ADMIN_PASSWORD=changeme
+#ARG LDAP_ORGANISATION=ssnet.local
+#ARG LDAP_DOMAIN=ssnet.local
+ARG LDAP_ADMIN_PASSWORD
+ARG LDAP_ORGANISATION
+ARG LDAP_DOMAIN
+
 
 ### Update OS
 RUN apt-get -y update && apt-get -y upgrade
@@ -74,6 +81,51 @@ RUN service slapd start
 COPY copyfiles/supervisord.conf /etc/supervisor/supervisord.conf
 
 
+### Settins For SLAPD
+# Backup Default Settings LDAP DataBase
+RUN mkdir -p /root/ldapconf/backup && \
+cd /root/ldapconf/backup && \
+slapcat -n0 -l ldap_db_conf_set_default_backup.ldif && \
+slapcat -n1 -l ldap_db_data_set_default_backup.ldif 
+
+RUN echo "slapd slapd/internal/generated_adminpw password ${LDAP_ADMIN_PASSWORD}" | debconf-set-selections
+RUN echo "slapd slapd/internal/adminpw password ${LDAP_ADMIN_PASSWORD}" | debconf-set-selections 
+RUN echo "slapd slapd/no_configuration boolean false" | debconf-set-selections
+RUN echo "slapd slapd/domain string ${LDAP_DOMAIN}" | debconf-set-selections
+RUN echo "slapd shared/organization string ${LDAP_ORGANISATION}" | debconf-set-selections
+RUN echo "slapd slapd/password1 password ${LDAP_ADMIN_PASSWORD}" | debconf-set-selections
+RUN echo "slapd slapd/password2 password ${LDAP_ADMIN_PASSWORD}" | debconf-set-selections
+RUN echo "slapd slapd/purge_database boolean false" | debconf-set-selections
+#RUN echo "slapd slapd/purge_database boolean true" | debconf-set-selections
+RUN echo "slapd slapd/move_old_database boolean true" | debconf-set-selections
+#RUN echo "slapd slapd/dump_database_destdir string /var/lib/ldap_backups/slapd-VERSION" | debconf-set-selections
+RUN echo "slapd slapd/dump_database select when needed" | debconf-set-selections
+
+RUN dpkg-reconfigure -f noninteractive slapd
+
+#RUN service slapd stop
+#RUN mv /etc/ldap/slapd.d /etc/ldap/slapd.d.backup
+#RUN mv /var/lib/ldap /var/lib/ldap.backup
+#RUN cp -ra /etc/ldap/slapd.d /etc/ldap/slapd.d.backup && rm -rf /etc/ldap/slapd.d/*
+#RUN cp -ra /var/lib/ldap /var/lib/ldap.backup && rm -rf /var/lib/ldap/*
+#RUN cp -ra /etc/ldap/slapd.d /etc/ldap/slapd.d.backup
+#RUN cp -ra /var/lib/ldap /var/lib/ldap.backup
+
+# Config SLAPD
+#COPY copyfiles/ldapconf/* /root/ldapconf/
+COPY copyfiles/ldapconf/ /root/ldapconf/
+
+# Add Schemas
+RUN cp /root/ldapconf/schema/* /etc/ldap/schema/
+#RUN ldapadd -Y EXTERNAL -H ldapi:/// -Q -f /etc/ldap/schema/sudo.ldif
+RUN service slapd start && ldapadd -Y EXTERNAL -H ldapi:/// -Q -f /etc/ldap/schema/sudo.ldif
+
+#ARG LDAP_DOMAIN_BASE_DN="$(ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcSuffix|awk '{print $NF}')"
+#ARG LDAP_ADMIN_DOMAIN_BASE_DN="$(ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcRootDN|awk '{print $NF}')"
+#ARG LDAP_DOMAIN_BASE_DN="ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcSuffix|awk '{print $NF}'"
+#ARG LDAP_ADMIN_DOMAIN_BASE_DN="ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcRootDN|awk '{print $NF}'"
+#RUN echo ${LDAP_DOMAIN_BASE_DN} > testfile
+
 ### Settins For phpLDAPadmin
 
 # Create New Config File Apache2 For phpLDAPadmin
@@ -84,25 +136,44 @@ RUN ln -s /etc/apache2/sites-available/phpldapadmin.conf /etc/apache2/sites-enab
 # Backup Default Config File Apache2
 #mv /etc/apache2/sites-available/000-default.conf{,.backup.`date '+%Y%m%d'`}
 
-# Remove Symvol Links On Default Config File Apache2
+# Remove SymLink On Default Config File Apache2
 RUN rm /etc/apache2/sites-enabled/000-default.conf
 
 # Delete Bug with {}
 RUN sed -i 's/'\''$'\'' == $rdn{ strlen($rdn) - 1 })/'\''$'\'' == $rdn[ strlen($rdn) - 1 ])/' /usr/share/phpldapadmin/lib/functions.php
+
+# Add Settings For Connect To LDAP
+#ARG LDAP_DOMAIN_BASE_DN='ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b "olcDatabase={1}mdb,cn=config"|grep olcSuffix'
+#ARG LDAP_DOMAIN_BASE_DN='ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b "olcDatabase={1}mdb,cn=config"'
+#ARG LDAP_DOMAIN_BASE_DN='ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcSuffix|awk '{print $NF}''
+#ARG LDAP_DOMAIN_BASE_DN="ldapsearch -Y EXTERNAL -H "ldapi:///" -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcSuffix|awk '\''{print $NF}'\''"
+#ARG LDAP_ADMIN_DOMAIN_BASE_DN="ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcRootDN|awk '{print $NF}'"
+#RUN echo ${LDAP_DOMAIN_BASE_DN} > testfile
+#RUN echo "${LDAP_DOMAIN_BASE_DN}" >> testfile
+#RUN service slapd start && ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcRootDN|awk '{print $NF}' >> testfile
+
+RUN cp /etc/phpldapadmin/config.php /etc/phpldapadmin/config.php.backup
+RUN sed -i 's/^$servers.*setValue.*server.*'\''name'\''.*/$servers->setValue('\''server'\'','\''name'\'','\'''${LDAP_ORGANISATION}' LDAP Server'\'');/' /etc/phpldapadmin/config.php
+RUN sed -i 's/^$servers.*setValue.*server.*'\''host'\''.*/$servers->setValue('\''server'\'','\''host'\'','\''localhost'\'');/' /etc/phpldapadmin/config.php
+#RUN sed -i 's/^$servers.*setValue.*server.*'\''base'\''.*/$servers->setValue('\''server'\'','\''base'\'',array('\''dc=test,dc=ssnet,dc=local'\''));/' /etc/phpldapadmin/config.php
+#RUN sed -i 's/^$servers.*setValue.*login.*'\''bind_id'\''.*/$servers->setValue('\''login'\'','\''bind_id'\'','\''dc=test,dc=ssnet,dc=local'\'');/' /etc/phpldapadmin/config.php
+#RUN sed -i 's/^$servers.*setValue.*server.*'\''base'\''.*/$servers->setValue('\''server'\'','\''base'\'',array('\'''${LDAP_DOMAIN_BASE_DN}''\''));/' /etc/phpldapadmin/config.php
+#RUN sed -i 's/^$servers.*setValue.*login.*'\''bind_id'\''.*/$servers->setValue('\''login'\'','\''bind_id'\'','\'''${LDAP_ADMIN_DOMAIN_BASE_DN}''\'');/' /etc/phpldapadmin/config.php
+#RUN sed -i 's/^$servers.*setValue.*server.*'\''base'\''.*/$servers->setValue('\''server'\'','\''base'\'',array('${LDAP_DOMAIN_BASE_DN}'));/' /etc/phpldapadmin/config.php
+#RUN sed -i 's/^$servers.*setValue.*login.*'\''bind_id'\''.*/$servers->setValue('\''login'\'','\''bind_id'\'','${LDAP_ADMIN_DOMAIN_BASE_DN}');/' /etc/phpldapadmin/config.php
+RUN service slapd start && \
+sed -i 's/^$servers.*setValue.*server.*'\''base'\''.*/$servers->setValue('\''server'\'','\''base'\'',array('\'''`ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcSuffix|awk '{print $NF}'`''\''));/' /etc/phpldapadmin/config.php && \
+sed -i 's/^$servers.*setValue.*login.*'\''bind_id'\''.*/$servers->setValue('\''login'\'','\''bind_id'\'','\'''`ldapsearch -Y EXTERNAL -H ldapi:/// -LLLQ -b olcDatabase={1}mdb,cn=config |grep olcRootDN|awk '{print $NF}'`''\'');/' /etc/phpldapadmin/config.php
+#sed -i 's~^$servers.*setValue.*server.*'\''base'\''.*~$servers->setValue('\''server'\'','\''base'\'',array('\'''`${LDAP_DOMAIN_BASE_DN}`''\''));~' /etc/phpldapadmin/config.php
+#sed -i 's/^$servers.*setValue.*server.*'\''base'\''.*/$servers->setValue('\''server'\'','\''base'\'',array('\'''`${LDAP_DOMAIN_BASE_DN}`''\''));/' /etc/phpldapadmin/config.php
+#RUN sed -i 's/^$servers.*setValue.*login.*'\''bind_id'\''.*/$servers->setValue('\''login'\'','\''bind_id'\'','\''\`'${LDAP_ADMIN_DOMAIN_BASE_DN}'\`'\'');/' /etc/phpldapadmin/config.php
 
 ### Expose Port For SSH Service
 EXPOSE 2222
 EXPOSE 389
 EXPOSE 80
 
+WORKDIR /root
+
 # Running SSH Service Demon
-#ENTRYPOINT /usr/sbin/sshd && /usr/sbin/nginx -g 'daemon off;'
-#ENTRYPOINT /usr/sbin/sshd -D
-#ENTRYPOINT /usr/bin/supervisord
 CMD ["/usr/bin/supervisord"]
-#CMD /usr/bin/supervisord
-#ENTRYPOINT /usr/sbin/sshd && /usr/sbin/slapd
-#ENTRYPOINT /usr/sbin/apache2 && /usr/sbin/slapd && /usr/sbin/sshd -D
-#ENTRYPOINT /usr/sbin/slapd && /usr/sbin/sshd -D
-#ENTRYPOINT /usr/sbin/sshd && /usr/sbin/slapd && /usr/sbin/apachectl -D FOREGROUND
-#ENTRYPOINT /usr/sbin/apachectl -D FOREGROUND && /usr/sbin/slapd && /usr/sbin/sshd

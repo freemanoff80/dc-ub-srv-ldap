@@ -18,6 +18,10 @@ services:
                 #ADD_USER_NAME: adminus
                 #ADD_USER_PASSWORD: changeme
                 #ADD_USER_SUDO: "yes"
+                ### LDAP Settings
+                LDAP_ADMIN_PASSWORD: changeme
+                LDAP_ORGANISATION: example_local
+                LDAP_DOMAIN: example.local
 
         networks:
             - dc-ldap
