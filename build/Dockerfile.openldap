@@ -112,7 +112,6 @@ RUN dpkg-reconfigure -f noninteractive slapd
 #RUN cp -ra /var/lib/ldap /var/lib/ldap.backup
 
 # Config SLAPD
-#COPY copyfiles/ldapconf/* /root/ldapconf/
 COPY copyfiles/ldapconf/ /root/ldapconf/
 
 # Add Schemas
